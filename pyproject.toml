@@ -1,0 +1,39 @@
+[project]
+name = "pumpkincarriageco"
+version = "0.1.0"
+description = "Private shop analytics foundation with synthetic demo data"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "alembic>=1.20.0",
+    "python-dotenv>=1.2.4",
+    "sqlalchemy>=2.1.5",
+    "streamlit>=1.66.0",
+    "tzdata>=2026.5",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src"]
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4.0",
+    "pytest>=9.1.1",
+    "ruff>=0.17.1",
+]
