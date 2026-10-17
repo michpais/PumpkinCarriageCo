@@ -28,3 +28,20 @@ must be agreed against statement samples before Phase 1 reconciliation.
 
 Views, visits, conversion, customer demographics, and SEO search volumes are not
 measured by the demo. No placeholder traffic data is generated.
+
+## Statement source summaries (Phase 1 Part 1)
+
+These are independent of demo KPIs and are not production revenue recognition.
+Group accepted entries by source month and source category. Count source-row
+occurrences, not orders or units. Sum each nullable signed monetary column
+independently, with exact integer USD cents. A column with no supplied numeric
+values remains unavailable rather than zero. Missing months are unavailable.
+
+For nondeposits validate Net = Amount + Fees & Taxes, substituting zero for an
+absent component only during the arithmetic check. Preserve absence in storage.
+Deposits are extracted from a strictly recognized description into a separate
+field and never treated as additional sales. Funding, buyer fees, taxes, shipping,
+marketing and refunds remain separate categories. Positive fee/shipping values
+are credits. Sale activity has not yet been decomposed into items, discounts,
+shipping and tax; it must not be relabeled item revenue. No cross-category net
+profit, AOV, contribution or tax-exclusive revenue is computed from these rows.

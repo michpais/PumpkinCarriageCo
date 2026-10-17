@@ -1,5 +1,11 @@
 # Local operation and Phase 1 gates
 
+For the implemented Phase 1 Part 1 workflow, use
+[statement-imports.md](statement-imports.md) and the README's separate statement
+commands. The demo instructions and original pre-integration gates below remain
+applicable to the demo and later API work. No API configuration is used for CSV
+imports. Do not run demo seeding against a real-data database.
+
 ## Running and changing the database
 
 Follow README.md from the repository root. uv sync --locked reproduces Python 3.12

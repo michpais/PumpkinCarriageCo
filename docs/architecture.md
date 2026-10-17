@@ -1,5 +1,8 @@
 # ADR 0001 — Local synthetic foundation
 
+Phase 1 Part 1 adds a separate statement workflow; see ADR 0002 below. The
+foundation decisions here remain the description of the synthetic demo.
+
 Status: proposed for review, implemented on `codex/phase-0-foundation`.
 Date: 2026-10-16.
 
@@ -76,3 +79,37 @@ not an accounting system or production dashboard. The deliberate synthetic table
 will coexist with new real-data models in a future migration rather than require
 unsafe reinterpretation of example records. PostgreSQL, retention, access control,
 and source reconciliation remain gates for real data.
+
+## ADR 0002 — Local statement source records
+
+Date: 2026-10-16. Implemented for review on `codex/phase-1-statement-import`.
+
+The owner authorized a read-only statement importer, separate real-data SQLite
+storage, minimized buyer fields and ten-year financial retention. The importer
+never reads API credentials. Original OneDrive files remain unchanged.
+
+Use `data/shop.sqlite3` via separate statement settings. The demo remains in
+`data/demo.sqlite3`. Revision 0002 adds statement imports, entries and recognized
+references; no demo facts are converted. UI and CLI call the same pure parser
+and transactional acceptance service. Page loads never migrate or import.
+
+Preserve source evidence through byte/row hashes and CSV record references,
+without copying unrestricted raw text into staging. The normalized source facts
+are append-only through application workflows. Local SQLite does not provide
+database-role enforcement of immutability. Changed accepted months require a
+future reviewed versioning workflow. API facts will have separate tables in this
+same real-data database and later reconciliation links; this part does not yet
+build a unified sales fact or add API amounts to statement totals.
+
+Classification is intentionally conservative: source Types map to separate
+categories; unknowns remain unclassified. Keep exact signed cents and missing
+values. Retain source dates without inferring a timezone or exact timestamp.
+Store parser/classification versions and warnings. Source hashes do not make the
+records anonymous; retained order IDs permit tracing through Etsy.
+
+Ten-year retention is represented as an inclusive retain-through date at the end
+of activity year + 10. No purge is implemented. Disk protection and manual closed
+database backups are local operating requirements, not automated security claims.
+Shared hosting, OAuth, API caching/retention terms, Stats, job-attempt history,
+full accounting and API reconciliation remain separate work. Details and limits
+are in [statement-imports.md](statement-imports.md).

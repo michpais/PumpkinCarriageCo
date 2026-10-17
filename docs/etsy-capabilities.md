@@ -3,6 +3,19 @@
 Research date: **2026-10-16**. No credentials or live API requests were used.
 Endpoint paths below are relative to `https://api.etsy.com/v3/application`.
 
+## Phase 1 Part 1 implementation status
+
+Monthly payment-account CSV import is implemented locally, with no API endpoint,
+OAuth scope, or personal/seller app access requirement. Reverified 2026-10-16:
+[Etsy statement guide](https://help.etsy.com/hc/en-us/articles/360016389113-How-to-Calculate-Your-Etsy-Payments-Deposit-Amount)
+describes monthly payment-account activity and deposit timing differences. The
+source grain is a statement activity row; freshness is the downloaded month plus
+the application's import observation time, not a live-sync timestamp. Missing
+months and unknown categories are explicit. See statement-imports.md for schema,
+privacy and validation. CSV import does not verify API historical completeness.
+API adapters and their scopes remain unimplemented until Part 2; cross-source
+reconciliation remains Part 3. Stats workbook import is a separate follow-up.
+
 ## Verification sources and limits
 
 The interactive [reference](https://developers.etsy.com/documentation/reference/)
