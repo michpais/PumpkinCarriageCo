@@ -1,6 +1,7 @@
 """Local statement preview/acceptance UI, separate from the synthetic dashboard."""
 
 import json
+from collections.abc import Iterable, Mapping
 from datetime import date
 
 import streamlit as st
@@ -8,8 +9,16 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from pumpkincarriageco.analytics.metrics import usd
+from pumpkincarriageco.analytics.statement_fees import preview_fee_summary
 from pumpkincarriageco.config import StatementSettings
-from pumpkincarriageco.ingestion.statements import Preview, StatementError, digest, preview_bytes
+from pumpkincarriageco.ingestion.statements import (
+    FEE_CLASSIFICATION_VERSION,
+    Preview,
+    StatementError,
+    category_label,
+    digest,
+    preview_bytes,
+)
 from pumpkincarriageco.repositories.database import make_engine
 from pumpkincarriageco.services.statements import (
     accept_previews,
@@ -17,9 +26,27 @@ from pumpkincarriageco.services.statements import (
     coverage,
     existing_status,
     import_history,
+    monthly_fee_summary,
     monthly_summary,
     source_entries,
 )
+
+
+def money_table(
+    rows: Iterable[Mapping[str, str | int | None]],
+) -> list[dict[str, str | int | None]]:
+    return [
+        {
+            key.removesuffix("_minor").replace("_", " ") + " (USD)"
+            if key.endswith("_minor")
+            else key: (usd(value) if isinstance(value, int) else "not supplied")
+            if key.endswith("_minor")
+            else value
+            for key, value in row.items()
+        }
+        for row in rows
+    ]
+
 
 st.set_page_config(page_title="Statement imports · Shop Desk", layout="wide")
 st.title("Etsy monthly statements")
@@ -28,6 +55,7 @@ st.info(
     "Select CSV copies for preview. Original files stay unchanged. Accepted rows are retained "
     "for 10 years after their activity year. Direct buyer details and free text are discarded."
 )
+st.caption("Payment means payments toward your Etsy bill; it excludes customer sales.")
 
 try:
     settings = StatementSettings.from_env()
@@ -65,7 +93,9 @@ try:
                     "month": item.period.isoformat()[:7],
                     "rows": len(item.rows),
                     "validation": "ready" if item.valid else "blocked",
-                    "existing": status,
+                    "existing": "Fee classification available"
+                    if status == "classification_available"
+                    else status,
                     "warnings": sum(not issue.blocking for issue in item.issues),
                 }
                 for item, status in zip(previews, statuses, strict=True)
@@ -91,7 +121,7 @@ try:
                 preview_totals.append(
                     {
                         "month": item.period.isoformat()[:7],
-                        "category": category,
+                        "category": category_label(category),
                         "rows": len(values),
                         "statement net (USD)": (
                             usd(sum(row.net_minor or 0 for row in values))
@@ -106,6 +136,16 @@ try:
                     }
                 )
         st.dataframe(preview_totals, hide_index=True)
+        st.write("Fee breakdown preview")
+        st.dataframe(
+            money_table([summary for item in previews for summary in preview_fee_summary(item)]),
+            hide_index=True,
+        )
+        if "classification_available" in statuses:
+            st.info(
+                "These months are already imported. Confirming adds fee classifications only; "
+                "it does not add or replace financial activity."
+            )
         batch: dict[date, set[str]] = {}
         for item in previews:
             batch.setdefault(item.period, set()).add(item.content_hash)
@@ -118,12 +158,13 @@ try:
             (
                 settings.shop_id
                 + settings.database_url
+                + FEE_CLASSIFICATION_VERSION
                 + "".join(item.file_hash for item in previews)
             ).encode()
         )
         accepted = st.checkbox("I reviewed these months and validation issues", key=key)
         if st.button(
-            "Import reviewed statements",
+            "Import or classify reviewed statements",
             disabled=(
                 parse_failed or conflict or not accepted or any(not item.valid for item in previews)
             ),
@@ -132,7 +173,8 @@ try:
                 results = accept_previews(session, settings.shop_id, previews)
             st.success(
                 f"Imported {sum(item.status == 'imported' for item in results)} month(s); "
-                f"{sum(item.status == 'already_imported' for item in results)} already imported."
+                f"{sum(item.status == 'already_imported' for item in results)} already imported; "
+                f"classified {sum(item.classified_fees for item in results)} existing fee row(s)."
             )
     st.subheader("Import history and coverage")
     today = date.today()
@@ -164,18 +206,20 @@ try:
         st.subheader("Monthly statement categories")
         summaries = monthly_summary(session, settings.shop_id)
         st.dataframe(
-            [
-                {
-                    key.removesuffix("_minor") + " (USD)" if key.endswith("_minor") else key: (
-                        usd(value) if isinstance(value, int) else "not supplied"
-                    )
-                    if key.endswith("_minor")
-                    else value
-                    for key, value in summary.items()
-                }
-                for summary in summaries
-            ],
+            money_table(
+                [
+                    summary | {"category": category_label(str(summary["category"]))}
+                    for summary in summaries
+                ]
+            ),
             hide_index=True,
+        )
+        st.subheader("Monthly fee breakdown")
+        st.dataframe(money_table(monthly_fee_summary(session, settings.shop_id)), hide_index=True)
+        st.caption(
+            "Charges and credits are positive amounts. Net cost = charges − credits. "
+            "Older imports remain Unclassified until the original CSVs are selected and confirmed. "
+            f"Fee classification rules: {FEE_CLASSIFICATION_VERSION}."
         )
         if history:
             st.subheader("Source traceability")
@@ -190,7 +234,7 @@ try:
             if selected_import.warning_count:
                 st.dataframe(json.loads(selected_import.validation_json), hide_index=True)
     st.caption(
-        "These are statement activity totals, not revenue or profit. Taxes, funding payments, "
+        "These are statement activity totals, not revenue or profit. Taxes, bill payments, "
         "deposits, and seller costs remain separate. API reconciliation is planned for Part 3. "
         "Source dates are preserved at day precision; their timezone is not yet verified."
     )

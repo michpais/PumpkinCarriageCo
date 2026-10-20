@@ -41,3 +41,20 @@ remain idempotent. See statement-imports.md for month conflicts and privacy.
 Retain-through is December 31 of source year + 10. No names, emails, addresses,
 card fragments, free-text titles/info/tax details, or geography are stored. Source
 reference IDs are retained intentionally. There is no raw CSV/blob or secret table.
+
+## Fee annotations (migration 0003)
+
+`statement_fee_classifications`: one derived annotation per entry/rule version.
+Fields: integer PK; required statement entry FK; allowlisted subtype (listing,
+processing, transaction_item, transaction_shipping, shop_setup, unclassified);
+rule version; UTC observed timestamp. Entry/version is unique. No title or other
+free text is stored. Scope is inherited through entry → import → shop.
+
+Application workflows insert annotations without updating accepted source facts.
+Existing fees lack annotations until equivalent source files are confirmed again;
+reports show them as Unclassified. Source import classification versions and
+warnings remain the original import metadata. Current fee derivation uses
+fee-titles-v1; source category parsing for new imports is statement-types-v2.
+Reports outer-join only the current fee-rule version, preserving totals if older
+versions coexist. Retention follows the source entry. Migration downgrade removes
+annotations only; it never drops source entries, but is still separately approved.

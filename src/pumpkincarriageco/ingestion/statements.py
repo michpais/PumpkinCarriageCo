@@ -12,7 +12,16 @@ from decimal import Decimal
 from pathlib import Path
 
 PARSER_VERSION = "etsy-monthly-v1"
-CLASSIFICATION_VERSION = "statement-types-v1"
+CLASSIFICATION_VERSION = "statement-types-v2"
+FEE_CLASSIFICATION_VERSION = "fee-titles-v1"
+FEE_SUBTYPES = {
+    "listing": "Listing",
+    "processing": "Payment processing",
+    "transaction_item": "Transaction — item",
+    "transaction_shipping": "Transaction — shipping",
+    "shop_setup": "Shop setup",
+    "unclassified": "Unclassified",
+}
 MAX_FILE_BYTES = 20 * 1024 * 1024
 HEADERS = (
     "Date",
@@ -85,6 +94,7 @@ class StatementRow:
     net_minor: int | None
     deposit_minor: int | None
     references: tuple[tuple[str, str], ...]
+    fee_subtype: str | None = None
 
 
 @dataclass(frozen=True)
@@ -103,6 +113,30 @@ class Preview:
 
 def digest(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
+
+
+def category_label(category: str) -> str:
+    # Keep the legacy storage code so existing imports need no source-data rewrite.
+    return "Payment" if category == "funding" else category.replace("_", " ").capitalize()
+
+
+def fee_subtype(title: str) -> str:
+    """Recognize statement descriptions, never infer a fee type from its amount."""
+    exact = {
+        "Listing fee": "listing",
+        "Credit for listing fee": "listing",
+        "Processing fee": "processing",
+        "Credit for processing fee": "processing",
+        "Transaction fee: Shipping": "transaction_shipping",
+        "Credit for transaction fee on shipping": "transaction_shipping",
+        "Charge added to bill for one-time shop set-up fee": "shop_setup",
+    }
+    if title in exact:
+        return exact[title]
+    for prefix in ("Transaction fee: ", "Credit for transaction fee on "):
+        if title.startswith(prefix) and title[len(prefix) :].strip():
+            return "transaction_item"
+    return "unclassified"
 
 
 def money(text: str) -> int | None:
@@ -178,6 +212,9 @@ def preview_bytes(name: str, data: bytes) -> Preview:
                 issues.append(Issue(row_number, "invalid_date_currency_or_money"))
                 continue
             category = CATEGORIES.get(values["Type"], "unclassified")
+            subtype = fee_subtype(values["Title"]) if category == "fee" else None
+            if subtype == "unclassified":
+                issues.append(Issue(row_number, "unclassified_fee", blocking=False))
             if category == "unclassified":
                 issues.append(Issue(row_number, "unclassified_type", blocking=False))
             deposit = None
@@ -214,6 +251,7 @@ def preview_bytes(name: str, data: bytes) -> Preview:
                     net,
                     deposit,
                     tuple(sorted(refs)),
+                    subtype,
                 )
             )
     except (csv.Error, OverflowError):

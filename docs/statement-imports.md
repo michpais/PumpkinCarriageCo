@@ -16,7 +16,7 @@ profit. Stats imports remain a separate follow-up after their schema is reviewed
    database and any database containing synthetic demo facts are rejected. These
    are real financial records even while the application is under development.
 4. Stop database writers, back up any existing database, and run the explicit
-   `statement_cli init` command. It applies Alembic through revision 0002. There
+   `statement_cli init` command. It applies Alembic through revision 0003. There
    is no migration or import on page load.
 5. Open the separate statement app or use `import --confirm`. The UI displays
    months, existing import status, validation issues, category counts and amounts
@@ -71,7 +71,7 @@ one may receive a safe database error and can retry after the other completes.
 
 These are statement classifications, not revenue recognition rules:
 
-| Etsy Type | Stored category | Interpretation |
+| Etsy Type | Category (storage code except Payment display label) | Interpretation |
 | --- | --- | --- |
 | Sale | sale | Statement sale activity, not item-only revenue |
 | Refund | refund | Signed refund activity |
@@ -80,7 +80,7 @@ These are statement classifications, not revenue recognition rules:
 | Tax | tax | Buyer-tax movements; not seller revenue |
 | Buyer Fee | buyer_fee | Separate buyer-paid fee movements |
 | Marketing | marketing | Marketing charges/credits |
-| Payment | funding | Funding/card/bill payments; not additional sales |
+| Payment | Payment | Payments toward the Etsy bill; excludes customer sales |
 | Deposit | deposit | Transfer to bank; not revenue |
 | Other | unclassified | Warning, retained separately for review |
 
@@ -99,6 +99,49 @@ opening/closing balance or bank-settlement reconciliation is claimed.
 Unknown Types become `unclassified`; unrecognized Tax Details receive a warning
 and are discarded. Warning codes and source-row references remain in import
 metadata. Free text is never used to guess revenue, product attribution or PII.
+
+### Fee subtypes and existing imports
+
+The UI and CLI report display **Payment**, matching Etsy Type `Payment`. The old
+internal storage code `funding` remains for database compatibility; accepted rows
+are not rewritten just to change a label.
+
+For Type `Fee`, title rules identify Listing, Payment processing, Transaction —
+item, Transaction — shipping, and Shop setup. Credit descriptions map to the
+same subtype as the corresponding charges. An unrecognized title remains
+Unclassified and produces a nonblocking warning. Marketing and postage are not
+included in these fee subtotals. No fee rate or type is guessed from the amount.
+
+Fee breakdowns group by statement month and subtype. Charges are the positive
+magnitude of negative Fee Net amounts; credits are positive Fee Net amounts.
+Net cost = charges − credits, so a credit-only subtype can have negative cost.
+These are supplementary views of the same source entries, never additional costs
+to add to the existing Fee category total. They use recorded amounts, not current
+fee rates. Preview and saved reports apply the same definitions. CLI `report`
+now returns `monthly_categories` and `fee_subtypes` collections with cents fields.
+
+Revision 0003 only adds `statement_fee_classifications`. It does not modify the
+accepted statement tables. Existing fees initially display Unclassified because
+their titles were discarded for privacy. Stop the app, back up the closed
+database, rerun `statement_cli init`, then select the exact original files again
+and confirm **Import or classify reviewed statements**. The preview shows **Fee
+classification available**. Equivalent reordered files also work: annotations
+match row SHA-256 plus occurrence, not the new upload's row position.
+
+After confirmation the service inserts append-only annotations with rule version
+`fee-titles-v1` and an aware UTC observation time. It changes no source amounts,
+IDs, counts, hashes, timestamps, original import warnings or retention dates.
+Subsequent imports skip the already classified rows. Changed source months still
+conflict; no reset/delete/reimport workaround is needed or permitted. Classification
+requires the same batch validation and confirmation as a new import. There is no
+automatic real-data migration or classification on page load. Future rule versions
+can add annotations while preserving earlier ones; current reports select only
+the current rule version and never count annotations as financial activity.
+
+On 2026-10-20 a read-only revalidation of the 26 source files recognized all 1,709
+Fee rows: 573 listing, 369 processing, 398 item transaction, 368 shipping transaction,
+one shop setup; no unclassified fees or validation warnings. Counts include credit
+rows. The user's existing real database was not migrated or changed for this check.
 
 ## Privacy, retention, and backup
 

@@ -74,8 +74,8 @@ def test_credits_deposits_funding_and_unknown_types():
     data = preview(
         [
             source_row(),
-            source_row("Fee", "--", "-$0.45", "-$0.45"),
-            source_row("Fee", "--", "$0.20", "$0.20"),
+            source_row("Fee", "--", "-$0.45", "-$0.45", Title="Listing fee"),
+            source_row("Fee", "--", "$0.20", "$0.20", Title="Credit for listing fee"),
             source_row("Refund", "-$3.00", "--", "-$3.00"),
             source_row("Tax", "--", "-$0.50", "-$0.50"),
             source_row("Deposit", "--", "--", "--", Title="$6.25 sent to your bank account"),

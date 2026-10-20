@@ -9,12 +9,19 @@ from alembic.config import Config
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from pumpkincarriageco.analytics.statement_fees import preview_fee_summary
 from pumpkincarriageco.config import StatementSettings
-from pumpkincarriageco.ingestion.statements import Preview, StatementError, preview_path
+from pumpkincarriageco.ingestion.statements import (
+    Preview,
+    StatementError,
+    category_label,
+    preview_path,
+)
 from pumpkincarriageco.repositories.database import make_engine
 from pumpkincarriageco.services.statements import (
     accept_previews,
     check_real_database,
+    monthly_fee_summary,
     monthly_summary,
 )
 
@@ -48,6 +55,7 @@ def main() -> None:
                             "rows": len(item.rows),
                             "valid": item.valid,
                             "file_hash": item.file_hash,
+                            "fee_subtypes": preview_fee_summary(item),
                             "issues": [
                                 {"row": issue.row, "code": issue.code, "blocking": issue.blocking}
                                 for issue in item.issues
@@ -84,11 +92,18 @@ def main() -> None:
                             "month": result.period.isoformat()[:7],
                             "status": result.status,
                             "rows": result.rows,
+                            "classified_fees": result.classified_fees,
                         }
                         for result in results
                     ]
                 else:
-                    output = monthly_summary(session, settings.shop_id)
+                    output = {
+                        "monthly_categories": [
+                            row | {"category": category_label(str(row["category"]))}
+                            for row in monthly_summary(session, settings.shop_id)
+                        ],
+                        "fee_subtypes": monthly_fee_summary(session, settings.shop_id),
+                    }
             print(json.dumps(output, indent=2))
         finally:
             engine.dispose()

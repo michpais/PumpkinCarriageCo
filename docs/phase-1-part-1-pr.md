@@ -23,12 +23,16 @@ OneDrive originals or connecting to Etsy.
   times. Free text and buyer/card details are discarded before persistence.
 - Ten-year retention markers, setup, backup/restore, definitions, synthetic sample
   output and operational limitations documented in statement-imports.md.
+- Payment displays Etsy's original Type label instead of funding. Fee subtypes
+  show charges, credits and net costs, derived from recognized titles. Revision
+  0003 adds versioned annotations; confirmed equivalent uploads can classify older
+  imports without modifying accepted records or adding duplicate activity.
 
 ## Validation
 
-- `uv run pytest`: 45 passed, including the existing demo tests, statement
+- `uv run pytest`: 59 passed, including the existing demo tests, statement
   parsing/privacy/idempotence/conflict/atomicity tests, and Streamlit AppTest flows.
-- `uv run mypy`: passed (19 source files).
+- `uv run mypy`: passed (20 source files).
 - `uv run ruff check .` and `uv run ruff format --check .`: passed.
 - `git diff --check`: passed.
 - Alembic metadata check and upgrade/downgrade/re-upgrade exercised by tests on
@@ -36,6 +40,10 @@ OneDrive originals or connecting to Etsy.
 - Read-only preview against the owner's 26 local statements: 2,935 USD records,
   July 2024–August 2026, zero blocking issues and zero warnings. No real-data
   database was created/imported for this verification. September is not supplied.
+- Read-only fee revalidation on 2026-10-20 classified all 1,709 Fee rows in the 26
+  statements, with no unknown subtypes. Tests verify legacy schema upgrade,
+  annotation-only classification, reordered rows/duplicates, charges and credits,
+  current-version filtering, shop isolation and unchanged original financial facts.
 - Streamlit workflow tested programmatically with synthetic files; no browser
   screenshot/visual layout review was performed. Synthetic output example is in
   statement-imports.md. No PostgreSQL, live Etsy or shared-hosting tests were run.
@@ -46,6 +54,13 @@ Additive Alembic revision 0002 creates statement_imports, statement_entries and
 statement_references. The real database defaults to data/shop.sqlite3 and must
 remain separate from data/demo.sqlite3. Existing demo records are not converted.
 Migrations and imports are explicit CLI/UI actions, never page-load effects.
+
+Revision 0003 adds statement_fee_classifications without modifying accepted facts.
+Users with a database from the initial implementation must back it up while
+closed, rerun `statement_cli init`, then select and confirm the original CSVs again
+to obtain fee subtypes. Unclassified remains visible until that step. Original
+import metadata and retention dates are unchanged; annotations have their own
+version/time. No actual user database has been migrated by the implementation.
 
 These tables preserve statement source activity, not curated revenue/profit.
 Deposits, buyer-tax movements, funding, fees and sale activity remain distinct.
@@ -80,6 +95,9 @@ statement environment variables were added to .env.example.
    No import should occur until the review checkbox and button are used.
 5. Import, inspect source traceability/history/categories, then import the same
    files again. Counts must remain unchanged. Confirm missing months are unavailable.
+   Check Payment is shown instead of funding and fee subtypes show charges,
+   credits and net cost. With older accepted months, confirming the same files adds
+   annotations only; source counts and totals must remain unchanged.
 6. With synthetic disposable files only, change one amount and Net in an already
    accepted month. Confirm conflict blocks replacement and any other selected
    month in the same batch. Invalid arithmetic must also block acceptance.

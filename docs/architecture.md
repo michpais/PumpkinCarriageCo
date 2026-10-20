@@ -113,3 +113,15 @@ database backups are local operating requirements, not automated security claims
 Shared hosting, OAuth, API caching/retention terms, Stats, job-attempt history,
 full accounting and API reconciliation remain separate work. Details and limits
 are in [statement-imports.md](statement-imports.md).
+
+### Fee classifications (2026-10-20 refinement)
+
+The owner requested clearer Payment labeling and fee subtypes before pushing.
+Retain the existing category storage code for compatibility and map it to Payment
+in presentation/CLI output. Add revision 0003 for versioned, append-only fee
+annotations. Original descriptions were deliberately discarded, so existing
+imports cannot be classified from stored amounts alone. User-confirmed equivalent
+source uploads add hash/occurrence-matched annotations without rewriting financial
+facts or deduplicating away legitimate repeats. Current reports use one annotation
+version and keep unclassified fees visible. No real database migration is performed
+as part of development; the user applies it explicitly after backup.

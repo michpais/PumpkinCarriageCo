@@ -69,3 +69,29 @@ def test_uninitialized_statement_db_and_invalid_configuration(database_url, monk
     app = AppTest.from_file(APP).run()
     assert not app.exception
     assert "separate from the demo" in app.error[0].value
+
+
+def test_payment_label_and_fee_breakdown(engine: Engine, database_url, monkeypatch):
+    configure(monkeypatch, database_url)
+    upload(
+        monkeypatch,
+        [
+            source_row("Fee", "--", "-$0.20", "-$0.20", Title="Listing fee"),
+            source_row("Fee", "--", "$0.10", "$0.10", Title="Credit for listing fee"),
+            source_row("Payment", "--", "$2.00", "$2.00", Title="Card Payment"),
+        ],
+    )
+    app = AppTest.from_file(APP, default_timeout=15).run()
+    assert not app.exception
+    category_tables = [frame.value for frame in app.dataframe if "category" in frame.value.columns]
+    assert "Payment" in category_tables[0]["category"].tolist()
+    assert "funding" not in category_tables[0]["category"].tolist()
+    fee_tables = [frame.value for frame in app.dataframe if "subtype" in frame.value.columns]
+    assert fee_tables[0].iloc[0]["charges (USD)"] == "$0.20"
+    assert fee_tables[0].iloc[0]["credits (USD)"] == "$0.10"
+    assert fee_tables[0].iloc[0]["net cost (USD)"] == "$0.10"
+    app.checkbox[0].check().run()
+    app.button[0].click().run()
+    assert not app.exception
+    fee_tables = [frame.value for frame in app.dataframe if "subtype" in frame.value.columns]
+    assert fee_tables[-1].iloc[0]["subtype"] == "Listing"

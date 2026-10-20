@@ -139,3 +139,23 @@ class StatementReference(Base):
     entry_id: Mapped[int] = mapped_column(ForeignKey("statement_entries.id"), index=True)
     kind: Mapped[str] = mapped_column(String(10))
     source_id: Mapped[str] = mapped_column(String(30))
+
+
+class StatementFeeClassification(Base):
+    """Versioned derived annotations; accepted source facts are never rewritten."""
+
+    __tablename__ = "statement_fee_classifications"
+    __table_args__ = (
+        UniqueConstraint("entry_id", "version", name="uq_statement_fee_version"),
+        CheckConstraint(
+            "subtype IN ('listing','processing','transaction_item',"
+            "'transaction_shipping','shop_setup','unclassified')",
+            name="ck_statement_fee_subtype",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    entry_id: Mapped[int] = mapped_column(ForeignKey("statement_entries.id"), index=True)
+    subtype: Mapped[str] = mapped_column(String(30))
+    version: Mapped[str] = mapped_column(String(40))
+    observed_at: Mapped[datetime] = mapped_column(UTCDateTime())

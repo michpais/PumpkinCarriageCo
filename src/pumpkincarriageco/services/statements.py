@@ -5,19 +5,23 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Literal
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.orm import Session
 
 from pumpkincarriageco.ingestion.statements import (
     CLASSIFICATION_VERSION,
+    FEE_CLASSIFICATION_VERSION,
+    FEE_SUBTYPES,
     PARSER_VERSION,
     Preview,
     StatementError,
+    category_label,
 )
 from pumpkincarriageco.models import (
     DemoOrder,
     Shop,
     StatementEntry,
+    StatementFeeClassification,
     StatementImport,
     StatementReference,
 )
@@ -26,8 +30,9 @@ from pumpkincarriageco.models import (
 @dataclass(frozen=True)
 class ImportResult:
     period: date
-    status: Literal["imported", "already_imported"]
+    status: Literal["imported", "already_imported", "classified_existing"]
     rows: int
+    classified_fees: int = 0
 
 
 def check_real_database(session: Session) -> None:
@@ -44,6 +49,24 @@ def existing_status(session: Session, shop_id: str, preview: Preview) -> str:
     if existing is None:
         return "new"
     if existing.content_hash == preview.content_hash:
+        missing = session.scalar(
+            select(StatementEntry.id)
+            .outerjoin(
+                StatementFeeClassification,
+                and_(
+                    StatementFeeClassification.entry_id == StatementEntry.id,
+                    StatementFeeClassification.version == FEE_CLASSIFICATION_VERSION,
+                ),
+            )
+            .where(
+                StatementEntry.import_id == existing.id,
+                StatementEntry.category == "fee",
+                StatementFeeClassification.id.is_(None),
+            )
+            .limit(1)
+        )
+        if missing is not None:
+            return "classification_available"
         return "already_imported"
     return "conflict"
 
@@ -78,7 +101,14 @@ def accept_previews(
         session.flush()
     results: list[ImportResult] = []
     for preview in previews:
-        if existing_status(session, shop_id, preview) == "already_imported":
+        status = existing_status(session, shop_id, preview)
+        if status == "classification_available":
+            count = classify_existing(session, shop_id, preview)
+            results.append(
+                ImportResult(preview.period, "classified_existing", len(preview.rows), count)
+            )
+            continue
+        if status == "already_imported":
             results.append(ImportResult(preview.period, "already_imported", len(preview.rows)))
             continue
         imported = StatementImport(
@@ -118,6 +148,15 @@ def accept_previews(
             )
             session.add(entry)
             session.flush()
+            if row.category == "fee":
+                session.add(
+                    StatementFeeClassification(
+                        entry_id=entry.id,
+                        subtype=row.fee_subtype or "unclassified",
+                        version=FEE_CLASSIFICATION_VERSION,
+                        observed_at=datetime.now(UTC),
+                    )
+                )
             session.add_all(
                 [
                     StatementReference(entry_id=entry.id, kind=kind, source_id=source_id)
@@ -126,6 +165,53 @@ def accept_previews(
             )
         results.append(ImportResult(preview.period, "imported", len(preview.rows)))
     return results
+
+
+def classify_existing(session: Session, shop_id: str, preview: Preview) -> int:
+    """Annotate only hash-matched rows of an accepted equivalent source month."""
+    imported = session.scalar(
+        select(StatementImport).where(
+            StatementImport.shop_id == shop_id, StatementImport.period == preview.period
+        )
+    )
+    if imported is None or imported.content_hash != preview.content_hash:
+        raise StatementError("Fee classification requires an unchanged accepted source")
+    entries = list(
+        session.scalars(
+            select(StatementEntry).where(
+                StatementEntry.import_id == imported.id, StatementEntry.category == "fee"
+            )
+        )
+    )
+    annotations = set(
+        session.scalars(
+            select(StatementFeeClassification.entry_id)
+            .join(StatementEntry)
+            .where(
+                StatementEntry.import_id == imported.id,
+                StatementFeeClassification.version == FEE_CLASSIFICATION_VERSION,
+            )
+        )
+    )
+    source_rows = {(row.fingerprint, row.occurrence): row for row in preview.rows}
+    count = 0
+    for entry in entries:
+        if entry.id in annotations:
+            continue
+        row = source_rows.get((entry.fingerprint, entry.occurrence))
+        if row is None or row.category != "fee":
+            raise StatementError("Accepted source-row identity does not match preview")
+        session.add(
+            StatementFeeClassification(
+                entry_id=entry.id,
+                subtype=row.fee_subtype or "unclassified",
+                version=FEE_CLASSIFICATION_VERSION,
+                observed_at=datetime.now(UTC),
+            )
+        )
+        count += 1
+    session.flush()
+    return count
 
 
 def import_history(session: Session, shop_id: str) -> list[StatementImport]:
@@ -194,9 +280,16 @@ def source_entries(
     shop_id: str,
     period: date,
 ) -> list[dict[str, str | int | None]]:
-    entries = session.scalars(
-        select(StatementEntry)
+    entries = session.execute(
+        select(StatementEntry, StatementFeeClassification.subtype)
         .join(StatementImport)
+        .outerjoin(
+            StatementFeeClassification,
+            and_(
+                StatementFeeClassification.entry_id == StatementEntry.id,
+                StatementFeeClassification.version == FEE_CLASSIFICATION_VERSION,
+            ),
+        )
         .where(StatementImport.shop_id == shop_id, StatementImport.period == period)
         .order_by(StatementEntry.source_row)
     )
@@ -204,7 +297,10 @@ def source_entries(
         {
             "source_row": entry.source_row,
             "activity_date": entry.activity_date.isoformat(),
-            "category": entry.category,
+            "category": category_label(entry.category),
+            "fee_subtype": (
+                FEE_SUBTYPES[subtype or "unclassified"] if entry.category == "fee" else None
+            ),
             "amount": entry.amount_text,
             "fees": entry.fees_text,
             "net": entry.net_text,
@@ -212,5 +308,46 @@ def source_entries(
             "source_row_sha256": entry.fingerprint,
             "occurrence": entry.occurrence,
         }
-        for entry in entries
+        for entry, subtype in entries
+    ]
+
+
+def monthly_fee_summary(session: Session, shop_id: str) -> list[dict[str, str | int]]:
+    subtype = func.coalesce(StatementFeeClassification.subtype, "unclassified")
+    charges = func.sum(case((StatementEntry.net_minor < 0, -StatementEntry.net_minor), else_=0))
+    credits = func.sum(case((StatementEntry.net_minor > 0, StatementEntry.net_minor), else_=0))
+    query = (
+        select(
+            StatementImport.period,
+            subtype,
+            func.count(StatementEntry.id),
+            charges,
+            credits,
+        )
+        .select_from(StatementEntry)
+        .join(StatementImport)
+        .outerjoin(
+            StatementFeeClassification,
+            and_(
+                StatementFeeClassification.entry_id == StatementEntry.id,
+                StatementFeeClassification.version == FEE_CLASSIFICATION_VERSION,
+            ),
+        )
+        .where(
+            StatementImport.shop_id == shop_id,
+            StatementEntry.category == "fee",
+        )
+        .group_by(StatementImport.period, subtype)
+        .order_by(StatementImport.period, subtype)
+    )
+    return [
+        {
+            "month": period.isoformat()[:7],
+            "subtype": FEE_SUBTYPES[kind],
+            "rows": count,
+            "charges_minor": debit,
+            "credits_minor": credit,
+            "net_cost_minor": debit - credit,
+        }
+        for period, kind, count, debit, credit in session.execute(query)
     ]

@@ -68,6 +68,25 @@ Original CSVs are read-only inputs. Accepted rows are minimized and retained for
 months are unavailable, not zero sales. These totals describe statement activity,
 not verified revenue or profit. API matching is deferred to Part 3.
 
+### Updating an existing statement database for fee breakdowns
+
+Stop Streamlit and back up the closed statement database first. Keep the same
+statement database path and internal shop ID used in your first test. Then run:
+
+```powershell
+uv run python -m pumpkincarriageco.services.statement_cli init
+uv run streamlit run src/pumpkincarriageco/app/statement_import.py
+```
+
+Revision 0003 adds a fee-classification table without modifying imported financial
+records. Select the same original CSVs again and confirm **Import or classify
+reviewed statements**. Existing months show **Fee classification available**;
+confirming adds annotations, not duplicate activity. Fee descriptions were not
+retained by the first importer, so reselecting the files is necessary. No reset
+or deletion is needed. Payment now uses Etsy's label in the UI. Monthly fee
+breakdowns show listing, processing, item/shipping transaction, shop setup and
+unclassified fees, with charges, credits and net cost separately.
+
 ## Documentation
 
 - [Architecture and assumptions](docs/architecture.md)
