@@ -237,4 +237,4 @@ Every PR should contain:
 
 ## 13. First instruction for a new Codex session
 
-Start by reading this file and inspecting the current repository. Do **not** assume an app or API integration already exists. First propose a small Phase 0 pull request that establishes the Python/uv/Streamlit project foundation, data architecture, API capability matrix with references to current Etsy docs, example configuration without credentials, and basic automated tests. Do not connect to or modify the production Etsy shop, create a deployment, or merge any PR. Identify blocking decisions and make reasonable documented assumptions for nonblocking issues.
+Start by reading this file and inspecting the current repository, documentations, tests, and Git state. Identify the current milestone and outstanding work. Continue from the existing implementation and do not repeat completed phases. Do **not** assume an app or API integration already exists. Do not connect to or modify the production Etsy shop, create a deployment, or merge any PR. Identify blocking decisions and make reasonable documented assumptions for nonblocking issues.
