@@ -1,12 +1,15 @@
+import logging
+from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 
 from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 from streamlit.testing.v1 import AppTest
-from test_statements import csv_bytes, source_row
+from test_statements import csv_bytes, preview, source_row
 
 from pumpkincarriageco.models import StatementEntry
+from pumpkincarriageco.services.statements import accept_previews
 
 APP = str(Path("src/pumpkincarriageco/app/statement_import.py").resolve())
 
@@ -138,3 +141,36 @@ def test_failed_backup_blocks_ui_import(engine, database_url, monkeypatch):
     assert "Backup folder unavailable" in app.error[0].value
     with Session(engine) as session:
         assert session.scalar(select(func.count()).select_from(StatementEntry)) == 0
+
+
+def test_mixed_imported_and_missing_coverage_renders_without_arrow_fallback(
+    engine,
+    database_url,
+    monkeypatch,
+    caplog,
+):
+    configure(monkeypatch, database_url)
+    with Session(engine) as session, session.begin():
+        accept_previews(
+            session,
+            "test-shop",
+            [
+                preview(),
+                preview([], name="etsy_statement_2025_2.csv"),
+            ],
+        )
+    caplog.set_level(logging.INFO, logger="streamlit.dataframe_util")
+    app = AppTest.from_file(APP, default_timeout=15).run()
+    app.date_input[0].set_value(date(2025, 1, 1)).run()
+    caplog.clear()
+    app.date_input[1].set_value(date(2025, 3, 31)).run()
+    assert not app.exception
+    assert not any(
+        "Serialization of dataframe to Arrow table was unsuccessful" in record.getMessage()
+        for record in caplog.records
+    )
+    table = next(frame.value for frame in app.dataframe if "status" in frame.value.columns)
+    assert table["status"].tolist() == ["imported", "imported", "missing"]
+    assert table.loc[0, "rows"] == 1
+    assert table.loc[1, "rows"] == 0
+    assert table["rows"].isna().tolist() == [False, False, True]

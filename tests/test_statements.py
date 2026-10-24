@@ -148,7 +148,7 @@ def test_import_is_repeatable_preserves_occurrences_and_source(engine: Engine, t
         assert monthly_summary(session, "other-shop") == []
         assert coverage(session, "shop-a", date(2025, 1, 1), date(2025, 2, 28)) == [
             {"month": "2025-01", "status": "imported", "rows": 2},
-            {"month": "2025-02", "status": "missing", "rows": "unavailable"},
+            {"month": "2025-02", "status": "missing", "rows": None},
         ]
     assert path.read_bytes() == before
 

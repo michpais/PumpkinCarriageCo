@@ -268,19 +268,21 @@ def monthly_summary(session: Session, shop_id: str) -> list[dict[str, str | int 
     ]
 
 
-def coverage(session: Session, shop_id: str, start: date, end: date) -> list[dict[str, str | int]]:
+def coverage(
+    session: Session, shop_id: str, start: date, end: date
+) -> list[dict[str, str | int | None]]:
     if start > end:
         raise StatementError("Coverage end must be on or after start")
     imported = {item.period: item for item in import_history(session, shop_id)}
     month = start.replace(day=1)
-    result: list[dict[str, str | int]] = []
+    result: list[dict[str, str | int | None]] = []
     while month <= end:
         item = imported.get(month)
         result.append(
             {
                 "month": month.isoformat()[:7],
                 "status": "imported" if item else "missing",
-                "rows": item.row_count if item else "unavailable",
+                "rows": item.row_count if item else None,
             }
         )
         if month.year == 9999 and month.month == 12:

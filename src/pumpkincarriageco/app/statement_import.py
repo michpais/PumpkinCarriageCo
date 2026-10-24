@@ -190,7 +190,14 @@ try:
             if start > end:
                 st.error("Coverage end must be on or after start.")
             else:
-                st.dataframe(coverage(session, settings.shop_id, start, end), hide_index=True)
+                st.dataframe(
+                    coverage(session, settings.shop_id, start, end),
+                    hide_index=True,
+                    column_config={"rows": st.column_config.NumberColumn("Rows", format="%d")},
+                )
+                st.caption(
+                    "Missing months have no row count; an imported empty statement has 0 rows."
+                )
         st.dataframe(
             [
                 {

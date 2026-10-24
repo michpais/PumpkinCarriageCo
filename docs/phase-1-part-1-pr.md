@@ -34,7 +34,7 @@ OneDrive originals or connecting to Etsy.
 
 ## Validation
 
-- `uv run pytest`: 75 passed, including the existing demo tests, statement
+- `uv run pytest`: 76 passed, including the existing demo tests, statement
   parsing/privacy/idempotence/conflict/atomicity tests, and Streamlit AppTest flows.
 - `uv run mypy`: passed (23 source files).
 - `uv run ruff check .` and `uv run ruff format --check .`: passed.
@@ -52,6 +52,11 @@ OneDrive originals or connecting to Etsy.
   detection, broken-reference rejection, source/destination safeguards, repeat
   no-op behavior, pre-import/pre-classification/pre-upgrade state, backup failure
   gating in service/UI/CLI, and rollback of failed DDL with the snapshot retained.
+- Reproduced the reported Arrow warning with a failing Streamlit regression test.
+  Coverage now uses a null numeric count for missing months rather than mixing
+  integers with the string `unavailable`. Imported empty months retain zero rows.
+  The UI test verifies rendering without Streamlit's serialization fallback log.
+  No database migration, stored-record change or reimport is required for this fix.
 - Streamlit workflow tested programmatically with synthetic files; no browser
   screenshot/visual layout review was performed. Synthetic output example is in
   statement-imports.md. No PostgreSQL, live Etsy or shared-hosting tests were run.

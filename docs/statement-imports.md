@@ -23,8 +23,10 @@ profit. Stats imports remain a separate follow-up after their schema is reviewed
    months, existing import status, validation issues, category counts and amounts
    before acceptance. Changing the selected files resets its confirmation box.
 6. Review history, source hashes, category totals, warnings and coverage. Choose
-   the coverage range explicitly; a missing month displays `missing` and
-   `unavailable`, never a financial zero. The current month may be incomplete.
+   the coverage range explicitly; a missing month displays `missing` and a null
+   row count, never zero activity. Imported empty statements have zero rows.
+   The row-count column stays numeric to avoid Streamlit/Arrow serialization
+   fallback warnings. The current month may be incomplete.
 
 All selected files must pass blocking validation. A conflicting month blocks the
 entire selected batch. Accepted records and their references commit in one
