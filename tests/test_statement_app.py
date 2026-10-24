@@ -40,11 +40,13 @@ def test_preview_confirmation_import_and_repeat(engine: Engine, database_url, mo
     app.button(key="import-statements").click().run()
     assert not app.exception
     assert "Imported 1 month(s)" in app.success[0].value
-    assert app.selectbox[0].value.isoformat() == "2025-01-01"
     app.button(key="import-statements").click().run()
     assert "1 already imported" in app.success[0].value
     with Session(engine) as session:
         assert session.scalar(select(func.count()).select_from(StatementEntry)) == 2
+    app.switch_page("views/statements.py").run()
+    assert app.selectbox[0].value.isoformat() == "2025-01-01"
+    app.switch_page("views/imports.py").run()
     upload(monkeypatch, [source_row(amount="$12.00", net="$12.00")])
     app.run()
     assert not app.exception
@@ -88,6 +90,10 @@ def test_payment_label_and_fee_breakdown(engine: Engine, database_url, monkeypat
     app = AppTest.from_file(APP, default_timeout=15).run()
     assert not app.exception
     category_tables = [frame.value for frame in app.dataframe if "category" in frame.value.columns]
+    assert any(
+        "Etsy bill" in caption.value and "excludes customer sales" in caption.value
+        for caption in app.caption
+    )
     assert "Payment" in category_tables[0]["category"].tolist()
     assert "funding" not in category_tables[0]["category"].tolist()
     fee_tables = [frame.value for frame in app.dataframe if "subtype" in frame.value.columns]
@@ -97,6 +103,7 @@ def test_payment_label_and_fee_breakdown(engine: Engine, database_url, monkeypat
     app.checkbox[0].check().run()
     app.button(key="import-statements").click().run()
     assert not app.exception
+    app.switch_page("views/statements.py").run()
     fee_tables = [frame.value for frame in app.dataframe if "subtype" in frame.value.columns]
     assert fee_tables[-1].iloc[0]["subtype"] == "Listing"
 
@@ -109,18 +116,20 @@ def test_manual_backup_button_and_automatic_backup_status(engine, database_url, 
     configure(monkeypatch, database_url)
     folder = Path(make_url(database_url).database).parent / "backups"
     app = AppTest.from_file(APP, default_timeout=15).run()
+    app.switch_page("views/backups.py").run()
     assert not folder.exists()
     app.button(key="backup-now").click().run()
     assert not app.exception
     assert "Backup created and verified" in app.success[0].value
     assert latest_backup(database_url, folder).verified
     upload(monkeypatch, [source_row()])
-    app.run()
+    app.switch_page("views/imports.py").run()
     app.checkbox[0].check().run()
     app.button(key="import-statements").click().run()
     assert not app.exception
     latest = latest_backup(database_url, folder).record
     assert latest.reason == "pre_import"
+    app.switch_page("views/backups.py").run()
     assert any(latest.filename in caption.value for caption in app.caption)
 
 
@@ -161,6 +170,7 @@ def test_mixed_imported_and_missing_coverage_renders_without_arrow_fallback(
         )
     caplog.set_level(logging.INFO, logger="streamlit.dataframe_util")
     app = AppTest.from_file(APP, default_timeout=15).run()
+    app.switch_page("views/statements.py").run()
     app.date_input[0].set_value(date(2025, 1, 1)).run()
     caplog.clear()
     app.date_input[1].set_value(date(2025, 3, 31)).run()

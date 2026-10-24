@@ -1,6 +1,6 @@
 # Statement database backups
 
-The statement app includes **Back up now**, a backup-folder display, last successful
+The unified app's **Backups** sidebar page includes **Back up now**, a backup-folder display, last successful
 backup time/file, retain-through date, and verification status. A manual backup
 does not require stopping Streamlit. No backup occurs merely because the app is
 opened or stopped. CLI alternative:

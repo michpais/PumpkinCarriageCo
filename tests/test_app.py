@@ -13,9 +13,11 @@ APP = str(Path("src/pumpkincarriageco/app/main.py").resolve())
 def test_demo_app(engine: Engine, database_url, monkeypatch):
     monkeypatch.setenv("PCC_DATABASE_URL", database_url)
     monkeypatch.setenv("PCC_SHOP_ID", "synthetic-demo")
+    monkeypatch.setenv("PCC_STATEMENTS_SHOP_ID", "")
     with Session(engine) as session, session.begin():
         seed_demo(session)
-    app = AppTest.from_file(APP).run()
+    app = AppTest.from_file(APP, default_timeout=15).run()
+    app.switch_page("views/demo.py").run()
     assert not app.exception
     assert "SYNTHETIC DEMO" in app.warning[0].value
     assert [metric.value for metric in app.metric] == ["4", "$204.00", "$224.00", "$136.00"]
@@ -27,7 +29,9 @@ def test_demo_app(engine: Engine, database_url, monkeypatch):
 def test_app_uninitialized_database(database_url, monkeypatch):
     monkeypatch.setenv("PCC_DATABASE_URL", database_url)
     monkeypatch.setenv("PCC_SHOP_ID", "synthetic-demo")
-    app = AppTest.from_file(APP).run()
+    monkeypatch.setenv("PCC_STATEMENTS_SHOP_ID", "")
+    app = AppTest.from_file(APP, default_timeout=15).run()
+    app.switch_page("views/demo.py").run()
     assert not app.exception
     assert "database unavailable" in app.error[0].value
 

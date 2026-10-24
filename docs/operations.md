@@ -1,5 +1,11 @@
 # Local operation and Phase 1 gates
 
+The canonical app command is `uv run streamlit run src/pumpkincarriageco/app/main.py`.
+It opens saved Statements; use the sidebar for Imports, Backups and the separate
+Synthetic demo. Existing statement `.env` settings and data stay unchanged. The
+older statement entry command remains supported, opening Imports. This UI-only
+navigation refactor needs no schema migration or reimport.
+
 For the implemented Phase 1 Part 1 workflow, use
 [statement-imports.md](statement-imports.md) and the README's separate statement
 commands. The demo instructions and original pre-integration gates below remain

@@ -142,3 +142,26 @@ SQLite integrity/foreign-key checks, fsync and checksum; UI history rechecks siz
 and checksum. No main schema migration, dependency, scheduler, encryption, cloud
 service, purge or restore feature is added. Backup files include all shops in the
 configured database. Operational details are in database-backups.md.
+
+### Native sidebar navigation (2026-10-24 refinement)
+
+The user selected native `st.navigation`/`st.Page` after comparing automatic
+folder discovery and a custom selector. `app/main.py` is now the shared entry
+point with Statements (default), Import statements, Backups, and Synthetic demo
+under Examples. Explicit registration in `app/navigation.py` fixes order/groups
+and makes future pages a file plus one registration entry. File-based views are
+tested by switching through real native routing in AppTest.
+
+The former combined statement UI is split by responsibility. Shared statement
+UI helpers own settings, safe database errors and exact-money formatting. Business
+services, models, migrations, source files and existing configuration are unchanged.
+The previous statement entry point remains a thin alias opening Imports with the
+same navigation. Only the selected page executes: statement configuration failures
+do not prevent selecting the demo. Navigation never triggers writes or backups.
+The demo retains its own database/settings and synthetic warnings; new financial
+KPIs, Etsy access and hosting remain outside this change. Design and execution
+notes are in docs/superpowers/specs and docs/superpowers/plans.
+
+Streamlit API verification: [native navigation](https://docs.streamlit.io/develop/api-reference/navigation/st.navigation)
+and [page registration](https://docs.streamlit.io/develop/api-reference/navigation/st.page),
+checked against the installed 1.66.0 API documentation on 2026-10-24.

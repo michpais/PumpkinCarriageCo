@@ -7,6 +7,9 @@ validate and explicitly accept downloaded Etsy monthly payment-account CSVs into
 a separate real-data SQLite database. Users can inspect monthly categories,
 missing coverage, import history and source-row evidence without changing their
 OneDrive originals or connecting to Etsy.
+The main app now opens saved Statements with a native sidebar linking Imports,
+Backups and the separate Synthetic demo. Previously these workflows required
+different launch commands and the main app only queried the synthetic table.
 
 ## Scope
 
@@ -31,12 +34,16 @@ OneDrive originals or connecting to Etsy.
   mandatory pre-change backups for actual imports/classification and existing
   schema upgrades. Failures block writes. Snapshots and manifests stay outside Git;
   no rotation, automatic restore, added schema, dependency or paid service.
+- Native grouped sidebar with four file-based pages. Statements is the default;
+  uploads and manual backup controls live on their own pages; the demo remains in
+  Examples. The old upload launch command opens Imports with the same sidebar.
+  Future pages require a script and one registration in app/navigation.py.
 
 ## Validation
 
-- `uv run pytest`: 76 passed, including the existing demo tests, statement
+- `uv run pytest`: 79 passed, including the existing demo tests, statement
   parsing/privacy/idempotence/conflict/atomicity tests, and Streamlit AppTest flows.
-- `uv run mypy`: passed (23 source files).
+- `uv run mypy`: passed (30 source files).
 - `uv run ruff check .` and `uv run ruff format --check .`: passed.
 - `git diff --check`: passed.
 - Alembic metadata check and upgrade/downgrade/re-upgrade exercised by tests on
@@ -57,6 +64,11 @@ OneDrive originals or connecting to Etsy.
   integers with the string `unavailable`. Imported empty months retain zero rows.
   The UI test verifies rendering without Streamlit's serialization fallback log.
   No database migration, stored-record change or reimport is required for this fix.
+- Native navigation tests verify the real-data landing page, page-specific
+  controls, no writes/backups on navigation, and no import authorization from
+  leaving an unconfirmed upload. Demo tests switch through the native router with
+  missing statement configuration. Existing import, backup and Arrow regression
+  tests now exercise their respective pages.
 - Streamlit workflow tested programmatically with synthetic files; no browser
   screenshot/visual layout review was performed. Synthetic output example is in
   statement-imports.md. No PostgreSQL, live Etsy or shared-hosting tests were run.
@@ -69,11 +81,13 @@ remain separate from data/demo.sqlite3. Existing demo records are not converted.
 Migrations and imports are explicit CLI/UI actions, never page-load effects.
 
 Revision 0003 adds statement_fee_classifications without modifying accepted facts.
-Users with a database from the initial implementation must back it up while
-via the integrated backup gate, rerun `statement_cli init`, then select and confirm the original CSVs again
+Users with a database from the initial implementation rerun `statement_cli init`,
+which creates a verified backup before upgrading, then select and confirm their CSVs again
 to obtain fee subtypes. Unclassified remains visible until that step. Original
 import metadata and retention dates are unchanged; annotations have their own
 version/time. No actual user database has been migrated by the implementation.
+The navigation refactor adds no schema migration, dependency or settings change.
+Existing statement IDs and database paths continue to select already imported data.
 `init` takes and verifies its own pre-upgrade backup; there is no separate manual
 copy requirement. No-op init skips backup. The migration environment now accepts
 the guarded external connection so DDL runs under the same writer reservation.
@@ -113,7 +127,8 @@ statement environment variables were added to .env.example.
 2. Preview a folder with the CLI; check month coverage, row counts and issues.
 3. Explicitly run init; an existing schema upgrade must first create a verified
    backup automatically. A failed required backup must leave the schema unchanged.
-4. Start the statement Streamlit app, select CSVs and inspect the review tables.
+4. Start `app/main.py` with Streamlit. It should open saved Statements without
+   reuploading files. Navigate to Import statements, select CSVs and inspect review tables.
    No import should occur until the review checkbox and button are used.
 5. Import, inspect source traceability/history/categories, then import the same
    files again. Counts must remain unchanged. Confirm missing months are unavailable.
@@ -123,11 +138,16 @@ statement environment variables were added to .env.example.
 6. With synthetic disposable files only, change one amount and Net in an already
    accepted month. Confirm conflict blocks replacement and any other selected
    month in the same batch. Invalid arithmetic must also block acceptance.
-7. Continue to launch the original demo separately; its behavior must be unchanged.
+7. Choose Synthetic demo in the Examples sidebar section; its behavior is unchanged
+   and it continues to query only its separate synthetic database.
 8. Use Back up now while Streamlit remains open. Confirm folder/time/file/status
    appear, then import a new month or classify an old one and confirm the latest
    backup updates. A no-op repeat should create no additional backup. In disposable
    testing only, make the backup folder unwritable and confirm the change is blocked.
+9. Confirm sidebar groups Shop and Examples; switch between Statements, Imports,
+   Backups and Synthetic demo. Viewing must create no source facts or backups.
+   Mark an upload reviewed without importing, navigate away and return: it must
+   require review again. The old statement_import.py launch still opens Imports.
 
 ## Rollback and limitations
 

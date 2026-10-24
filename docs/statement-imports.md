@@ -19,14 +19,20 @@ profit. Stats imports remain a separate follow-up after their schema is reviewed
    `statement_cli init` command. It applies Alembic through revision 0003. There
    is no migration or import on page load.
    Existing schema upgrades require an automatic verified backup before any DDL.
-5. Open the separate statement app or use `import --confirm`. The UI displays
+5. Open `app/main.py` and choose **Import statements**, or use `import --confirm`.
+   The old statement launch command remains a compatibility alias opening Imports.
+   The UI displays
    months, existing import status, validation issues, category counts and amounts
    before acceptance. Changing the selected files resets its confirmation box.
-6. Review history, source hashes, category totals, warnings and coverage. Choose
+6. Choose **Statements** to review history, source hashes, category totals,
+   warnings and coverage. Saved data is available without selecting files again.
+   Choose
    the coverage range explicitly; a missing month displays `missing` and a null
    row count, never zero activity. Imported empty statements have zero rows.
    The row-count column stays numeric to avoid Streamlit/Arrow serialization
    fallback warnings. The current month may be incomplete.
+   Initial coverage starts at the earliest accepted month when available. Category
+   and fee tables show all imported months; coverage selectors affect coverage only.
 
 All selected files must pass blocking validation. A conflicting month blocks the
 entire selected batch. Accepted records and their references commit in one
@@ -168,10 +174,16 @@ reimporting does not extend the period. Metadata and references follow their
 source records. Expiry review must cover backups as well as the active database;
 it must not delete or alter the owner's OneDrive source files.
 
+The sidebar separates saved Statements, Import statements, Backups, and the
+Synthetic demo (Examples section). Real-data pages use only statement settings;
+the demo uses only the original separate demo configuration. Viewing/navigation
+does not import, classify, seed, migrate or create a backup. Unconfirmed uploads
+are not accepted on navigation, and must be reselected/reviewed on return.
+
 Storage is local SQLite without application-level encryption or authentication.
 Use an access-restricted Windows account and encrypted disk, keep the server bound
 to loopback, and do not expose it through shared hosting. The app now provides
-online **Back up now** and verified automatic backups before actual imports,
+online **Back up now** on the Backups page and verified automatic backups before actual imports,
 classification or existing-schema upgrades. No database shutdown is required for
 backups. Use the guarded CLI `init` for statement migrations. See
 [database-backups.md](database-backups.md) for verification, destination settings,

@@ -1,9 +1,9 @@
 # PumpkinCarriageCo
 
 Private shop analytics foundation for Godmother Minnie and her business advisor.
-The Phase 0 dashboard runs on synthetic USD data. Phase 1 Part 1 adds a separate
-local monthly-statement importer. No Etsy client, OAuth, background jobs, or live
-shop writes are implemented; API credentials are not read by this importer.
+One Streamlit app provides saved statement reports, imports, backups and a
+separate synthetic demo through native sidebar navigation. No Etsy client, OAuth,
+background jobs, or live shop writes are implemented; API credentials are not read.
 
 ## Local setup (Python 3.12 + uv)
 
@@ -11,18 +11,42 @@ Run from the repository root in PowerShell:
 
 ```powershell
 uv sync --locked
-Copy-Item .env.example .env
-uv run alembic upgrade head
-uv run python -m pumpkincarriageco.services.demo
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+```
+
+Set `PCC_STATEMENTS_SHOP_ID` in `.env` to a stable internal shop identifier before
+using the real-data pages. Keep the identifier and database path already used for
+existing imports. Then initialize the schema explicitly and start the app:
+
+```powershell
+uv run python -m pumpkincarriageco.services.statement_cli init
 uv run streamlit run src/pumpkincarriageco/app/main.py
 ```
 
-Open http://localhost:8501. The server binds to loopback; this is a local demo
-without user authentication. Do not expose it to a network. Keep real statement
-data in the separate importer database described below, not the demo database.
+Open http://localhost:8501. The server binds to loopback without user
+authentication; do not expose it to a network. Main opens **Statements** using
+the existing real-data database. Real statement data stays separate from the demo.
 The app reads data; migrations and demo seeding are explicit CLI steps.
 Seeding is repeatable and only accepts an empty database or the existing demo shop.
 `.env` is loaded by the settings layer; existing environment variables take precedence.
+
+| Sidebar section | Page | Purpose |
+| --- | --- | --- |
+| Shop | Statements (default) | Saved coverage, history, monthly categories/fees and source records |
+| Shop | Import statements | Preview and explicitly confirm uploads or fee classification |
+| Shop | Backups | Back up now and inspect latest verification status |
+| Examples | Synthetic demo | Original illustrative dashboard using the separate demo settings |
+
+If you want the optional demo, prepare only its separate database first:
+
+```powershell
+uv run alembic upgrade head
+uv run python -m pumpkincarriageco.services.demo
+```
+
+Missing statement settings do not prevent navigating to the demo. Opening or
+switching pages never imports, classifies, seeds, migrates or backs up data.
+If you leave an unconfirmed upload, reselect/review it before importing.
 
 ```powershell
 uv run ruff check .
@@ -52,10 +76,10 @@ Leave the demo settings unchanged. Statement storage defaults to
 
 ```powershell
 uv run python -m pumpkincarriageco.services.statement_cli init
-uv run streamlit run src/pumpkincarriageco/app/statement_import.py
+uv run streamlit run src/pumpkincarriageco/app/main.py
 ```
 
-Select the monthly CSVs, review validation and category totals, then confirm the
+Choose **Import statements**, select the CSVs, review validation and category totals, then confirm the
 import. Alternatively, after reviewing the CLI preview:
 
 ```powershell
@@ -76,7 +100,7 @@ statement database path and internal shop ID used in your first test. Then run:
 
 ```powershell
 uv run python -m pumpkincarriageco.services.statement_cli init
-uv run streamlit run src/pumpkincarriageco/app/statement_import.py
+uv run streamlit run src/pumpkincarriageco/app/main.py
 ```
 
 Revision 0003 adds a fee-classification table without modifying imported financial
@@ -90,7 +114,7 @@ unclassified fees, with charges, credits and net cost separately.
 
 ### Integrated statement backups
 
-Use **Back up now** in the statement app; Streamlit can remain open. The app
+Use **Back up now** on **Backups**; Streamlit can remain open. The page
 shows the backup folder, last successful backup and current verification status.
 Imports/classification and schema upgrades create verified backups automatically
 before changing existing storage. A failed required backup blocks the change.
@@ -106,6 +130,23 @@ uv run python -m pumpkincarriageco.services.statement_cli backup
 
 See [backup verification, retention and restore instructions](docs/database-backups.md).
 No automatic deletion or restore is implemented.
+
+## Adding a sidebar capability
+
+Create a page script under `src/pumpkincarriageco/app/views/`, then register it in
+the appropriate group in `app/navigation.py`. For example, after creating its file:
+
+```python
+st.Page(APP_DIR / "views/new_capability.py", title="New capability", url_path="new-capability")
+```
+
+The entry point owns `st.set_page_config`, the shared title and navigation.
+Only the selected page executes. Pages call shared services; business rules and
+guarded writes do not belong in navigation. New pages must have unique URLs.
+The old `streamlit run src/pumpkincarriageco/app/statement_import.py` command is
+supported as a compatibility entry point: it opens Import statements with the
+same sidebar. Use `main.py` as the canonical command. This navigation change
+needs no migration, reimport, `.env` update, or change to stored records.
 
 ## Documentation
 
