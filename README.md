@@ -70,7 +70,8 @@ not verified revenue or profit. API matching is deferred to Part 3.
 
 ### Updating an existing statement database for fee breakdowns
 
-Stop Streamlit and back up the closed statement database first. Keep the same
+Stop Streamlit before schema upgrades; `init` automatically creates and verifies
+a backup before upgrading an existing schema. Keep the same
 statement database path and internal shop ID used in your first test. Then run:
 
 ```powershell
@@ -86,6 +87,25 @@ retained by the first importer, so reselecting the files is necessary. No reset
 or deletion is needed. Payment now uses Etsy's label in the UI. Monthly fee
 breakdowns show listing, processing, item/shipping transaction, shop setup and
 unclassified fees, with charges, credits and net cost separately.
+
+### Integrated statement backups
+
+Use **Back up now** in the statement app; Streamlit can remain open. The app
+shows the backup folder, last successful backup and current verification status.
+Imports/classification and schema upgrades create verified backups automatically
+before changing existing storage. A failed required backup blocks the change.
+Preview, unchanged repeat imports, and no-op initialization do not create backups.
+
+The default folder is `<your home>/Documents/PumpkinCarriageCo-Backups`, outside
+Git. Optionally set `PCC_STATEMENTS_BACKUP_DIR` in `.env` to another private folder
+outside Git. No extra setting is required for the default. CLI manual backup:
+
+```powershell
+uv run python -m pumpkincarriageco.services.statement_cli backup
+```
+
+See [backup verification, retention and restore instructions](docs/database-backups.md).
+No automatic deletion or restore is implemented.
 
 ## Documentation
 

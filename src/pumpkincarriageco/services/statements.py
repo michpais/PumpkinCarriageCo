@@ -71,12 +71,12 @@ def existing_status(session: Session, shop_id: str, preview: Preview) -> str:
     return "conflict"
 
 
-def accept_previews(
+def validate_previews(
     session: Session,
     shop_id: str,
     previews: list[Preview],
-) -> list[ImportResult]:
-    """Caller owns one transaction; all inputs preflight before any records are added."""
+) -> list[str]:
+    """Read-only preflight, shared with the backed-up write workflow."""
     if not shop_id.strip() or shop_id == "synthetic-demo" or len(shop_id) > 100:
         raise StatementError("A separate internal shop ID is required")
     check_real_database(session)
@@ -85,15 +85,29 @@ def accept_previews(
     if any(not preview.valid for preview in previews):
         raise StatementError("Resolve blocking validation issues before import")
     months: dict[date, str] = {}
+    statuses: list[str] = []
     for preview in previews:
         if preview.period in months and months[preview.period] != preview.content_hash:
             raise StatementError("Selected files conflict for the same month")
         months[preview.period] = preview.content_hash
-        if existing_status(session, shop_id, preview) == "conflict":
+        status = existing_status(session, shop_id, preview)
+        statuses.append(status)
+        if status == "conflict":
             raise StatementError("A changed statement month requires review; nothing was replaced")
     shop = session.get(Shop, shop_id)
     if shop and shop.currency != "USD":
         raise StatementError("Selected shop currency does not match USD statements")
+    return statuses
+
+
+def accept_previews(
+    session: Session,
+    shop_id: str,
+    previews: list[Preview],
+) -> list[ImportResult]:
+    """Persistence primitive; UI/CLI use statement_operations.import_statements for backup."""
+    validate_previews(session, shop_id, previews)
+    shop = session.get(Shop, shop_id)
     if shop is None:
         session.add(
             Shop(id=shop_id, name="PumpkinCarriageCo", timezone="America/New_York", currency="USD")

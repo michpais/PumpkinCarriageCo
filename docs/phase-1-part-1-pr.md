@@ -27,12 +27,16 @@ OneDrive originals or connecting to Etsy.
   show charges, credits and net costs, derived from recognized titles. Revision
   0003 adds versioned annotations; confirmed equivalent uploads can classify older
   imports without modifying accepted records or adding duplicate activity.
+- Integrated online backups: manual UI/CLI action, last-backup verification, and
+  mandatory pre-change backups for actual imports/classification and existing
+  schema upgrades. Failures block writes. Snapshots and manifests stay outside Git;
+  no rotation, automatic restore, added schema, dependency or paid service.
 
 ## Validation
 
-- `uv run pytest`: 59 passed, including the existing demo tests, statement
+- `uv run pytest`: 75 passed, including the existing demo tests, statement
   parsing/privacy/idempotence/conflict/atomicity tests, and Streamlit AppTest flows.
-- `uv run mypy`: passed (20 source files).
+- `uv run mypy`: passed (23 source files).
 - `uv run ruff check .` and `uv run ruff format --check .`: passed.
 - `git diff --check`: passed.
 - Alembic metadata check and upgrade/downgrade/re-upgrade exercised by tests on
@@ -44,6 +48,10 @@ OneDrive originals or connecting to Etsy.
   statements, with no unknown subtypes. Tests verify legacy schema upgrade,
   annotation-only classification, reordered rows/duplicates, charges and credits,
   current-version filtering, shop isolation and unchanged original financial facts.
+- Backup tests cover an open WAL database, snapshot verification and corruption
+  detection, broken-reference rejection, source/destination safeguards, repeat
+  no-op behavior, pre-import/pre-classification/pre-upgrade state, backup failure
+  gating in service/UI/CLI, and rollback of failed DDL with the snapshot retained.
 - Streamlit workflow tested programmatically with synthetic files; no browser
   screenshot/visual layout review was performed. Synthetic output example is in
   statement-imports.md. No PostgreSQL, live Etsy or shared-hosting tests were run.
@@ -57,10 +65,13 @@ Migrations and imports are explicit CLI/UI actions, never page-load effects.
 
 Revision 0003 adds statement_fee_classifications without modifying accepted facts.
 Users with a database from the initial implementation must back it up while
-closed, rerun `statement_cli init`, then select and confirm the original CSVs again
+via the integrated backup gate, rerun `statement_cli init`, then select and confirm the original CSVs again
 to obtain fee subtypes. Unclassified remains visible until that step. Original
 import metadata and retention dates are unchanged; annotations have their own
 version/time. No actual user database has been migrated by the implementation.
+`init` takes and verifies its own pre-upgrade backup; there is no separate manual
+copy requirement. No-op init skips backup. The migration environment now accepts
+the guarded external connection so DDL runs under the same writer reservation.
 
 These tables preserve statement source activity, not curated revenue/profit.
 Deposits, buyer-tax movements, funding, fees and sale activity remain distinct.
@@ -81,6 +92,11 @@ Local SQLite is not encrypted/authenticated by this application: use a restricte
 account and encrypted disk/backup storage. Streamlit remains loopback-only. Ten
 years is a business policy represented as retain-through year + 10, December 31;
 there is no automatic purge. Backups require the same retention review.
+The default backup folder is `<your home>/Documents/PumpkinCarriageCo-Backups`;
+optional `PCC_STATEMENTS_BACKUP_DIR` selects another private folder outside Git.
+Manifests use a database-path identity hash, checksum, size, reason/time and source
+retention marker; they contain no business records or database URL. No user backup
+was created during development. Missing/changed latest snapshots are flagged.
 
 No dependencies, lockfile, or demo environment defaults changed. Separate optional
 statement environment variables were added to .env.example.
@@ -90,7 +106,8 @@ statement environment variables were added to .env.example.
 1. Follow README statement setup; select an internal shop ID in .env. Do not use
    synthetic-demo. Keep statement and demo database paths distinct.
 2. Preview a folder with the CLI; check month coverage, row counts and issues.
-3. Back up an existing closed statement database, then explicitly run init.
+3. Explicitly run init; an existing schema upgrade must first create a verified
+   backup automatically. A failed required backup must leave the schema unchanged.
 4. Start the statement Streamlit app, select CSVs and inspect the review tables.
    No import should occur until the review checkbox and button are used.
 5. Import, inspect source traceability/history/categories, then import the same
@@ -102,6 +119,10 @@ statement environment variables were added to .env.example.
    accepted month. Confirm conflict blocks replacement and any other selected
    month in the same batch. Invalid arithmetic must also block acceptance.
 7. Continue to launch the original demo separately; its behavior must be unchanged.
+8. Use Back up now while Streamlit remains open. Confirm folder/time/file/status
+   appear, then import a new month or classify an old one and confirm the latest
+   backup updates. A no-op repeat should create no additional backup. In disposable
+   testing only, make the backup folder unwritable and confirm the change is blocked.
 
 ## Rollback and limitations
 
@@ -111,7 +132,7 @@ real storage: the 0002 downgrade drops imported source evidence. Any destructive
 database operation needs separate human authorization. Restore only to a separate
 path before explicitly selecting that copy.
 
-Not included: API connection, automated backups or purge, full authentication,
+Not included: API connection, scheduled/off-device backups or purge, full authentication,
 PostgreSQL validation, import-attempt job history, changed-source replacement,
 Stats import, API/statement matching, bank reconciliation or full profitability.
 Only the observed CSV schema and USD are supported; other export layouts require

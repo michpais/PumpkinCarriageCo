@@ -15,9 +15,10 @@ profit. Stats imports remain a separate follow-up after their schema is reviewed
 3. Keep `PCC_STATEMENTS_DATABASE_URL=sqlite:///data/shop.sqlite3`. The default demo
    database and any database containing synthetic demo facts are rejected. These
    are real financial records even while the application is under development.
-4. Stop database writers, back up any existing database, and run the explicit
+4. Stop other writers for schema upgrades and run the explicit
    `statement_cli init` command. It applies Alembic through revision 0003. There
    is no migration or import on page load.
+   Existing schema upgrades require an automatic verified backup before any DDL.
 5. Open the separate statement app or use `import --confirm`. The UI displays
    months, existing import status, validation issues, category counts and amounts
    before acceptance. Changing the selected files resets its confirmation box.
@@ -122,8 +123,8 @@ now returns `monthly_categories` and `fee_subtypes` collections with cents field
 
 Revision 0003 only adds `statement_fee_classifications`. It does not modify the
 accepted statement tables. Existing fees initially display Unclassified because
-their titles were discarded for privacy. Stop the app, back up the closed
-database, rerun `statement_cli init`, then select the exact original files again
+their titles were discarded for privacy. Stop the app, rerun `statement_cli init`
+(which automatically backs up an existing schema before upgrading), then select the original files again
 and confirm **Import or classify reviewed statements**. The preview shows **Fee
 classification available**. Equivalent reordered files also work: annotations
 match row SHA-256 plus occurrence, not the new upload's row position.
@@ -167,12 +168,13 @@ it must not delete or alter the owner's OneDrive source files.
 
 Storage is local SQLite without application-level encryption or authentication.
 Use an access-restricted Windows account and encrypted disk, keep the server bound
-to loopback, and do not expose it through shared hosting. Stop all writers before
-copying the closed database to an access-restricted, encrypted backup location
-outside the repository. Back up before each migration/import batch and after a
-reviewed import. Keep a dated backup inventory with coverage and restore checks.
-Restore to a separate path, inspect coverage/counts, then explicitly select it;
-never overwrite newer records. Backup automation, key management and shared-user
+to loopback, and do not expose it through shared hosting. The app now provides
+online **Back up now** and verified automatic backups before actual imports,
+classification or existing-schema upgrades. No database shutdown is required for
+backups. Use the guarded CLI `init` for statement migrations. See
+[database-backups.md](database-backups.md) for verification, destination settings,
+failure handling, ten-year markers and deliberate restore instructions. There is
+no automatic purge or restore. Encryption/key management and shared-user
 authentication remain future work. No paid services are required.
 
 ## Verification and limitations

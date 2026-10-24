@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from pumpkincarriageco.analytics.metrics import usd
 from pumpkincarriageco.analytics.statement_fees import preview_fee_summary
+from pumpkincarriageco.app.backup_panel import render_backup_panel
 from pumpkincarriageco.config import StatementSettings
 from pumpkincarriageco.ingestion.statements import (
     FEE_CLASSIFICATION_VERSION,
@@ -20,8 +21,9 @@ from pumpkincarriageco.ingestion.statements import (
     preview_bytes,
 )
 from pumpkincarriageco.repositories.database import make_engine
+from pumpkincarriageco.services.backups import BackupError
+from pumpkincarriageco.services.statement_operations import import_statements
 from pumpkincarriageco.services.statements import (
-    accept_previews,
     check_real_database,
     coverage,
     existing_status,
@@ -65,6 +67,8 @@ except ValueError:
 if not settings.shop_id:
     st.error("Set PCC_STATEMENTS_SHOP_ID to a separate internal shop identifier, then restart.")
     st.stop()
+
+backup_panel = st.container()
 
 uploaded = st.file_uploader("Monthly statement CSVs", type="csv", accept_multiple_files=True)
 previews: list[Preview] = []
@@ -165,12 +169,12 @@ try:
         accepted = st.checkbox("I reviewed these months and validation issues", key=key)
         if st.button(
             "Import or classify reviewed statements",
+            key="import-statements",
             disabled=(
                 parse_failed or conflict or not accepted or any(not item.valid for item in previews)
             ),
         ):
-            with Session(engine) as session, session.begin():
-                results = accept_previews(session, settings.shop_id, previews)
+            results = import_statements(settings, previews)
             st.success(
                 f"Imported {sum(item.status == 'imported' for item in results)} month(s); "
                 f"{sum(item.status == 'already_imported' for item in results)} already imported; "
@@ -238,6 +242,8 @@ try:
         "deposits, and seller costs remain separate. API reconciliation is planned for Part 3. "
         "Source dates are preserved at day precision; their timezone is not yet verified."
     )
+except BackupError as error:
+    st.error(str(error))
 except (SQLAlchemyError, StatementError):
     st.error(
         "Statement database unavailable, demo data detected, or import conflict. "
@@ -246,3 +252,6 @@ except (SQLAlchemyError, StatementError):
     st.code("uv run python -m pumpkincarriageco.services.statement_cli init")
 finally:
     engine.dispose()
+
+with backup_panel:
+    render_backup_panel(settings)

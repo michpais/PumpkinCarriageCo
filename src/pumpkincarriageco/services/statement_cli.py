@@ -4,8 +4,6 @@ import argparse
 import json
 from pathlib import Path
 
-from alembic import command
-from alembic.config import Config
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -18,8 +16,9 @@ from pumpkincarriageco.ingestion.statements import (
     preview_path,
 )
 from pumpkincarriageco.repositories.database import make_engine
+from pumpkincarriageco.services.backups import BackupError, create_backup
+from pumpkincarriageco.services.statement_operations import import_statements, initialize_statements
 from pumpkincarriageco.services.statements import (
-    accept_previews,
     check_real_database,
     monthly_fee_summary,
     monthly_summary,
@@ -37,7 +36,7 @@ def scan(directory: Path) -> list[Preview]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("preview", "init", "import", "report"))
+    parser.add_argument("action", choices=("preview", "init", "import", "report", "backup"))
     parser.add_argument("--directory", type=Path)
     parser.add_argument("--confirm", action="store_true", help="Accept validated local imports")
     args = parser.parse_args()
@@ -74,20 +73,22 @@ def main() -> None:
                 raise StatementError("Review preview first, then pass --confirm to import")
         settings = StatementSettings.from_env()
         if args.action == "init":
-            config = Config("alembic.ini")
-            config.attributes["database_url"] = settings.database_url
-            command.upgrade(config, "head")
+            backup = initialize_statements(settings)
+            if backup:
+                print(f"Pre-migration backup verified: {settings.backup_dir / backup.filename}")
             print("Statement schema ready. No source files were imported.")
+            return
+        if args.action == "backup":
+            backup = create_backup(settings.database_url, settings.backup_dir)
+            print(f"Backup verified: {settings.backup_dir / backup.filename}")
             return
         if not settings.shop_id:
             raise StatementError("Set PCC_STATEMENTS_SHOP_ID to an internal shop identifier")
-        engine = make_engine(settings.database_url)
-        try:
-            with Session(engine) as session, session.begin():
-                check_real_database(session)
-                if args.action == "import":
-                    results = accept_previews(session, settings.shop_id, previews)
-                    output: object = [
+        if args.action == "import":
+            results = import_statements(settings, previews)
+            print(
+                json.dumps(
+                    [
                         {
                             "month": result.period.isoformat()[:7],
                             "status": result.status,
@@ -95,19 +96,26 @@ def main() -> None:
                             "classified_fees": result.classified_fees,
                         }
                         for result in results
-                    ]
-                else:
-                    output = {
-                        "monthly_categories": [
-                            row | {"category": category_label(str(row["category"]))}
-                            for row in monthly_summary(session, settings.shop_id)
-                        ],
-                        "fee_subtypes": monthly_fee_summary(session, settings.shop_id),
-                    }
+                    ],
+                    indent=2,
+                )
+            )
+            return
+        engine = make_engine(settings.database_url)
+        try:
+            with Session(engine) as session, session.begin():
+                check_real_database(session)
+                output = {
+                    "monthly_categories": [
+                        row | {"category": category_label(str(row["category"]))}
+                        for row in monthly_summary(session, settings.shop_id)
+                    ],
+                    "fee_subtypes": monthly_fee_summary(session, settings.shop_id),
+                }
             print(json.dumps(output, indent=2))
         finally:
             engine.dispose()
-    except StatementError as error:
+    except (StatementError, BackupError) as error:
         parser.exit(1, f"{error}. No source files were changed.\n")
     except (ValueError, OSError, SQLAlchemyError):
         # Do not print raw exception/arguments: SQL errors can include IDs and connection URLs.

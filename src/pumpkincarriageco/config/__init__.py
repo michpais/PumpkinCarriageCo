@@ -28,6 +28,9 @@ class Settings:
 class StatementSettings:
     database_url: str = field(default="sqlite:///data/shop.sqlite3", repr=False)
     shop_id: str = ""
+    backup_dir: Path = field(
+        default_factory=lambda: Path.home() / "Documents" / "PumpkinCarriageCo-Backups", repr=False
+    )
 
     @classmethod
     def from_env(cls) -> "StatementSettings":
@@ -47,4 +50,10 @@ class StatementSettings:
         shop_id = os.getenv("PCC_STATEMENTS_SHOP_ID", "").strip()
         if shop_id == "synthetic-demo" or len(shop_id) > 100:
             raise ValueError("Choose a separate internal shop ID of at most 100 characters")
-        return cls(database_url, shop_id)
+        backup_value = os.getenv("PCC_STATEMENTS_BACKUP_DIR", "").strip()
+        backup_dir = (
+            Path(backup_value).expanduser()
+            if backup_value
+            else (Path.home() / "Documents" / "PumpkinCarriageCo-Backups")
+        )
+        return cls(database_url, shop_id, backup_dir)

@@ -6,6 +6,11 @@ commands. The demo instructions and original pre-integration gates below remain
 applicable to the demo and later API work. No API configuration is used for CSV
 imports. Do not run demo seeding against a real-data database.
 
+Statement backups are now integrated: use **Back up now** or `statement_cli backup`.
+Actual writes and upgrades through `statement_cli init` require a verified
+pre-change backup. Follow [database-backups.md](database-backups.md). The manual
+closed-copy instructions below are for the original demo workflow.
+
 ## Running and changing the database
 
 Follow README.md from the repository root. uv sync --locked reproduces Python 3.12

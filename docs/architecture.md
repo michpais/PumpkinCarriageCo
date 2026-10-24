@@ -108,8 +108,8 @@ Store parser/classification versions and warnings. Source hashes do not make the
 records anonymous; retained order IDs permit tracing through Etsy.
 
 Ten-year retention is represented as an inclusive retain-through date at the end
-of activity year + 10. No purge is implemented. Disk protection and manual closed
-database backups are local operating requirements, not automated security claims.
+of activity year + 10. No purge is implemented. Disk protection is an operating
+requirement; integrated statement backups are described below.
 Shared hosting, OAuth, API caching/retention terms, Stats, job-attempt history,
 full accounting and API reconciliation remain separate work. Details and limits
 are in [statement-imports.md](statement-imports.md).
@@ -125,3 +125,20 @@ source uploads add hash/occurrence-matched annotations without rewriting financi
 facts or deduplicating away legitimate repeats. Current reports use one annotation
 version and keep unclassified fees visible. No real database migration is performed
 as part of development; the user applies it explicitly after backup.
+
+### Integrated SQLite backups (2026-10-24 refinement)
+
+Use Python's SQLite online backup API and verified sidecar manifests outside Git.
+Manual UI/CLI snapshots can run while the app is open. Backed-up write entry
+points reserve the SQLite writer before validation, snapshot the committed state
+using a second read-only connection, then perform the import/classification or
+migration in the original transaction. Backup failure prevents the change; failed
+migrations roll back DDL under the explicit transaction. No-op work skips backup.
+
+Manifests avoid adding backup metadata tables to the database that must be backed
+up before migrations. They record only path identity hash, generated filename,
+reason, UTC creation time, checksum, size and retention date. Verification uses
+SQLite integrity/foreign-key checks, fsync and checksum; UI history rechecks size
+and checksum. No main schema migration, dependency, scheduler, encryption, cloud
+service, purge or restore feature is added. Backup files include all shops in the
+configured database. Operational details are in database-backups.md.
